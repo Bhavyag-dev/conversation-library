@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "ChatGPT History Organizer",
+  "version": "1.0.0",
+  "description": "Enhance your ChatGPT experience by organizing, searching, and exporting your chat history.",
+  "permissions": ["storage", "activeTab"],
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": "icon.svg"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://chat.openai.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icon.svg",
+    "48": "icon.svg",
+    "128": "icon.svg"
+  }
+}
