@@ -62,7 +62,7 @@ const wrapPdfText = (value: string, maxChars = 88) => {
   return lines;
 };
 
-const buildPdfBytes = (chats: ChatItem[]) => {
+const buildPdfBytes = (chats: ChatItem[], title: string) => {
   const pageWidth = 612;
   const pageHeight = 792;
   const marginX = 48;
@@ -85,7 +85,7 @@ const buildPdfBytes = (chats: ChatItem[]) => {
     currentY -= lineHeight;
   };
 
-  pushLine('ChatGPT Prompt Library', 18);
+  pushLine(title, 18);
   pushLine(`Exported ${format(new Date(), 'PPP p')}`, 11);
   pushLine(`Chats saved: ${chats.length}`, 11);
   pushLine('', 11);
@@ -329,14 +329,14 @@ const App: React.FC = () => {
   }, [chats]);
 
   const exportData = (formatType: 'json' | 'pdf') => {
-    const data: ChatItem[] = Object.values(chats);
+    const data: ChatItem[] = selectedChat ? [selectedChat] : Object.values(chats);
 
     if (formatType === 'json') {
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
-      anchor.download = 'chatgpt-prompt-library.json';
+      anchor.download = selectedChat ? `${selectedChat.title.slice(0, 50) || 'chat'}.json` : 'chatgpt-prompt-library.json';
       anchor.click();
       URL.revokeObjectURL(url);
       setFeedbackMessage('Exported JSON');
@@ -351,15 +351,18 @@ const App: React.FC = () => {
     const sortedData = [...data].sort(
       (a, b) => getSafeDate(b.capturedAt || b.date).getTime() - getSafeDate(a.capturedAt || a.date).getTime(),
     );
-    const pdfBytes = buildPdfBytes(sortedData);
+    const pdfTitle = selectedChat ? `Chat Export: ${selectedChat.title}` : 'ChatGPT Prompt Library';
+    const pdfBytes = buildPdfBytes(sortedData, pdfTitle);
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = 'chatgpt-prompt-library.pdf';
+    anchor.download = selectedChat
+      ? `${selectedChat.title.replace(/[<>:"/\\|?*]+/g, '').slice(0, 60) || 'chat-export'}.pdf`
+      : 'chatgpt-prompt-library.pdf';
     anchor.click();
     URL.revokeObjectURL(url);
-    setFeedbackMessage('Downloaded PDF');
+    setFeedbackMessage(selectedChat ? 'Downloaded current chat PDF' : 'Downloaded library PDF');
   };
 
   const deleteChat = (id: string) => {
