@@ -1,41 +1,57 @@
-# ChatGPT History Organizer - Chrome Extension
+# Conversation Library
 
-This extension enhances the ChatGPT web interface by organizing your chat history, allowing you to search, filter, and export your conversations.
+A Chrome extension for saving open ChatGPT conversations into a local library. It captures the current conversation on demand, stores your prompts locally, lets you add notes and bookmarks, and exports either a single conversation or the full library as JSON or PDF.
 
-## Features
-- **Automatic Sync**: Scrapes your ChatGPT sidebar and current chat messages.
-- **Organization**: Groups chats by date (Today, Yesterday, Last 7 Days, Month).
-- **Search & Filter**: Find specific conversations by keywords in titles or prompts.
-- **Detailed View**: See all user prompts from a specific chat without leaving the popup.
-- **Export**: Download your history as JSON or CSV.
-- **Dark Mode**: Supports both light and dark themes.
+## What It Does
 
-## Setup Instructions
+- Save the currently open ChatGPT conversation
+- Keep a local searchable library of saved conversations
+- Add notes to each saved conversation
+- Bookmark important items for quick filtering
+- Export the selected conversation or the full library as JSON or PDF
+- Works entirely with local browser storage
 
-### 1. Build the Extension
-Run the following command in your terminal:
+## How It Works
+
+This extension does not try to mirror all of ChatGPT history in real time. Instead, it focuses on a reliable manual workflow:
+
+1. Open a conversation on `chatgpt.com`
+2. Click `Save Current Chat` in the extension popup
+3. Browse, search, annotate, bookmark, and export saved conversations
+
+## Development
+
+Install dependencies:
+
+```bash
+npm install
+```
+
+Build the extension:
+
 ```bash
 npm run build
 ```
-This will create a `dist` folder containing all the necessary files.
 
-### 2. Load the Extension in Chrome
-1. Open Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** (toggle in the top right corner).
-3. Click **Load unpacked**.
-4. Select the `dist` folder from this project.
+Type-check the project:
 
-### 3. Usage
-1. Go to [chatgpt.com](https://chatgpt.com).
-2. The extension will automatically start syncing your sidebar chats.
-3. Click on a chat in the sidebar to sync its messages/prompts.
-4. Click the extension icon in your browser toolbar to open the organizer.
+```bash
+npm run lint
+```
 
-## Technical Details
-- **Manifest V3**: Uses the latest Chrome extension standards.
-- **Content Scripts**: Safely scrapes the ChatGPT DOM using `MutationObserver`.
-- **Chrome Storage**: Caches your history locally for fast access.
-- **React & Tailwind**: Built with a modern, responsive UI.
+## Load In Chrome
 
-## Note on Icons
-The extension expects icons (`icon16.png`, `icon48.png`, `icon128.png`) in the `public` folder. You can add your own icons or convert the provided SVG to PNGs.
+1. Open `chrome://extensions`
+2. Enable `Developer mode`
+3. Click `Load unpacked`
+4. Select the local `dist` folder
+
+## Project Structure
+
+- `src/popup/App.tsx`: popup UI
+- `src/content/index.ts`: content script for capturing the current conversation
+- `public/manifest.json`: Chrome extension manifest
+
+## License
+
+MIT
