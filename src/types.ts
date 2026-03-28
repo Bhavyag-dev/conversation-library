@@ -6,6 +6,8 @@ export interface ChatItem {
   prompts: string[];
   tags?: string[];
   isBookmarked?: boolean;
+  notes?: string;
+  capturedAt?: string;
 }
 
 export interface ChromeStorage {

@@ -3,7 +3,7 @@
   "name": "ChatGPT History Organizer",
   "version": "1.0.0",
   "description": "Enhance your ChatGPT experience by organizing, searching, and exporting your chat history.",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "tabs"],
   "action": {
     "default_popup": "index.html",
     "default_icon": "icon.svg"

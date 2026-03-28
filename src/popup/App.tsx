@@ -1,8 +1,6 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
-  ArrowDownAZ,
-  Calendar,
-  ChevronRight,
+  BookOpen,
   Copy,
   Download,
   ExternalLink,
@@ -14,28 +12,8 @@ import {
   Sun,
   Trash2,
 } from 'lucide-react';
-import {
-  endOfMonth,
-  format,
-  isThisMonth,
-  isToday,
-  isYesterday,
-  parseISO,
-  startOfMonth,
-  subDays,
-} from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ChatItem, ChromeStorage } from '../types';
-
-type DateFilter = 'all' | 'today' | 'yesterday' | 'last7' | 'month';
-type SortMode = 'newest' | 'oldest' | 'title';
-
-const dateFilterLabels: Record<DateFilter, string> = {
-  all: 'All',
-  today: 'Today',
-  yesterday: 'Yesterday',
-  last7: 'Last 7 Days',
-  month: 'This Month',
-};
 
 const STORAGE_KEYS = {
   chats: 'chats',
@@ -47,23 +25,170 @@ const getSafeDate = (value: string) => {
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
+const escapePdfText = (value: string) =>
+  value
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+
+const wrapPdfText = (value: string, maxChars = 88) => {
+  const normalized = value.replace(/\r/g, '');
+  const paragraphs = normalized.split('\n');
+  const lines: string[] = [];
+
+  paragraphs.forEach((paragraph) => {
+    const trimmed = paragraph.trim();
+    if (!trimmed) {
+      lines.push('');
+      return;
+    }
+
+    const words = trimmed.split(/\s+/);
+    let current = '';
+
+    words.forEach((word) => {
+      const candidate = current ? `${current} ${word}` : word;
+      if (candidate.length <= maxChars) {
+        current = candidate;
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    });
+
+    if (current) lines.push(current);
+  });
+
+  return lines;
+};
+
+const buildPdfBytes = (chats: ChatItem[]) => {
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const marginX = 48;
+  const topY = 744;
+  const bottomY = 52;
+  const lineHeight = 16;
+
+  const pages: string[][] = [[]];
+  let currentPage = pages[0];
+  let currentY = topY;
+
+  const pushLine = (text: string, fontSize = 11) => {
+    if (currentY < bottomY) {
+      currentPage = [];
+      pages.push(currentPage);
+      currentY = topY;
+    }
+
+    currentPage.push(`BT /F1 ${fontSize} Tf 1 0 0 1 ${marginX} ${currentY} Tm (${escapePdfText(text)}) Tj ET`);
+    currentY -= lineHeight;
+  };
+
+  pushLine('ChatGPT Prompt Library', 18);
+  pushLine(`Exported ${format(new Date(), 'PPP p')}`, 11);
+  pushLine(`Chats saved: ${chats.length}`, 11);
+  pushLine('', 11);
+
+  chats.forEach((chat, chatIndex) => {
+    wrapPdfText(chat.title, 70).forEach((line, index) => {
+      pushLine(index === 0 ? `Title: ${line}` : `       ${line}`, index === 0 ? 14 : 12);
+    });
+    pushLine(`Saved: ${format(getSafeDate(chat.capturedAt || chat.date), 'PPP p')}`, 11);
+    pushLine(`URL: ${chat.url}`, 10);
+    pushLine(`Bookmarked: ${chat.isBookmarked ? 'Yes' : 'No'}`, 11);
+    pushLine('Prompts:', 12);
+
+    if (chat.prompts.length === 0) {
+      pushLine('  - No prompts captured.', 11);
+    } else {
+      chat.prompts.forEach((prompt) => {
+        wrapPdfText(`- ${prompt}`, 84).forEach((line) => pushLine(`  ${line}`, 11));
+      });
+    }
+
+    if (chat.notes?.trim()) {
+      pushLine('Notes:', 12);
+      wrapPdfText(chat.notes, 84).forEach((line) => pushLine(`  ${line}`, 11));
+    }
+
+    if (chatIndex < chats.length - 1) {
+      pushLine('', 11);
+      pushLine('------------------------------------------------------------', 10);
+      pushLine('', 11);
+    }
+  });
+
+  const objects: string[] = [];
+  const addObject = (body: string) => {
+    objects.push(body);
+    return objects.length;
+  };
+
+  const fontObjectId = addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const pageObjectIds: number[] = [];
+
+  const contentObjectIds = pages.map((lines) => {
+    const stream = lines.join('\n');
+    return addObject(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  });
+
+  const pagesObjectIdPlaceholder = objects.length + 2 + pages.length;
+
+  pages.forEach((_lines, index) => {
+    const pageObjectId = addObject(
+      `<< /Type /Page /Parent ${pagesObjectIdPlaceholder} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontObjectId} 0 R >> >> /Contents ${contentObjectIds[index]} 0 R >>`,
+    );
+    pageObjectIds.push(pageObjectId);
+  });
+
+  const pagesObjectId = addObject(`<< /Type /Pages /Count ${pageObjectIds.length} /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(' ')}] >>`);
+  const catalogObjectId = addObject(`<< /Type /Catalog /Pages ${pagesObjectId} 0 R >>`);
+
+  let pdf = '%PDF-1.4\n';
+  const offsets: number[] = [0];
+
+  objects.forEach((body, index) => {
+    offsets[index + 1] = pdf.length;
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  for (let i = 1; i <= objects.length; i += 1) {
+    pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogObjectId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return new TextEncoder().encode(pdf);
+};
+
 const App: React.FC = () => {
   const [chats, setChats] = useState<Record<string, ChatItem>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [filterDate, setFilterDate] = useState<DateFilter>('all');
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>('newest');
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncLabel, setLastSyncLabel] = useState('Not synced yet');
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [statusLabel, setStatusLabel] = useState('Open a ChatGPT conversation and save it here');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   const loadChats = () => {
     chrome.storage.local.get([STORAGE_KEYS.chats], (result: ChromeStorage) => {
-      setChats(result.chats || {});
+      const nextChats = result.chats || {};
+      setChats(nextChats);
+
+      if (selectedChatId && !nextChats[selectedChatId]) {
+        setSelectedChatId(null);
+      }
     });
+  };
+
+  const saveChats = (nextChats: Record<string, ChatItem>) => {
+    setChats(nextChats);
+    chrome.storage.local.set({ chats: nextChats });
   };
 
   useEffect(() => {
@@ -92,8 +217,6 @@ const App: React.FC = () => {
         if (areaName === 'local' && changes.chats) {
           const nextChats = (changes.chats.newValue as Record<string, ChatItem>) || {};
           setChats(nextChats);
-          setLastSyncLabel(`Synced ${format(new Date(), 'p')}`);
-          setIsSyncing(false);
         }
       };
 
@@ -103,33 +226,7 @@ const App: React.FC = () => {
         chrome.storage.onChanged.removeListener(handleStorageChange);
       };
     }
-
-    setChats({
-      '1': {
-        id: '1',
-        title: 'React Hooks Tutorial',
-        url: 'https://chatgpt.com/c/1',
-        date: new Date().toISOString(),
-        prompts: ['How to use useEffect?', 'What is useMemo?'],
-        tags: ['react', 'hooks'],
-      },
-      '2': {
-        id: '2',
-        title: 'Tailwind CSS Tips',
-        url: 'https://chatgpt.com/c/2',
-        date: subDays(new Date(), 1).toISOString(),
-        prompts: ['How to use grid in tailwind?', 'Tailwind arbitrary values'],
-        isBookmarked: true,
-      },
-      '3': {
-        id: '3',
-        title: 'Node.js Backend',
-        url: 'https://chatgpt.com/c/3',
-        date: subDays(new Date(), 5).toISOString(),
-        prompts: ['Express.js setup', 'Middleware in express'],
-      },
-    });
-  }, []);
+  }, [selectedChatId]);
 
   useEffect(() => {
     if (!feedbackMessage) return;
@@ -141,44 +238,63 @@ const App: React.FC = () => {
     return () => window.clearTimeout(timeout);
   }, [feedbackMessage]);
 
-  const requestSync = () => {
+  const upsertChat = (chat: ChatItem) => {
+    const existing = chats[chat.id];
+    const nextChats = {
+      ...chats,
+      [chat.id]: {
+        ...existing,
+        ...chat,
+        prompts: chat.prompts.length > 0 ? chat.prompts : existing?.prompts || [],
+        capturedAt: new Date().toISOString(),
+      },
+    };
+
+    saveChats(nextChats);
+    setSelectedChatId(chat.id);
+  };
+
+  const captureCurrentChat = () => {
     if (typeof chrome === 'undefined' || !chrome.tabs) return;
 
-    setIsSyncing(true);
-    setLastSyncLabel('Syncing from ChatGPT...');
+    setIsCapturing(true);
+    setStatusLabel('Capturing current chat...');
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const activeTabId = tabs[0]?.id;
-      const activeTabUrl = tabs[0]?.url || '';
+      const activeTab = tabs[0];
+      const activeTabId = activeTab?.id;
+      const activeTabUrl = activeTab?.url || '';
       const isSupportedPage =
         activeTabUrl.startsWith('https://chatgpt.com/') ||
         activeTabUrl.startsWith('https://chat.openai.com/');
 
       if (!activeTabId || !isSupportedPage) {
-        setIsSyncing(false);
-        setLastSyncLabel('Open ChatGPT to sync');
+        setIsCapturing(false);
+        setStatusLabel('Open a ChatGPT conversation first');
         return;
       }
 
-      chrome.tabs.sendMessage(activeTabId, { type: 'history-organizer:sync' }, () => {
+      chrome.tabs.sendMessage(activeTabId, { type: 'history-organizer:capture-current-chat' }, (response) => {
         if (chrome.runtime.lastError) {
-          setIsSyncing(false);
-          setLastSyncLabel('Reload ChatGPT and try again');
+          setIsCapturing(false);
+          setStatusLabel('Reload the ChatGPT tab and try again');
           return;
         }
 
-        window.setTimeout(() => {
-          setIsSyncing(false);
-          setLastSyncLabel(`Synced ${format(new Date(), 'p')}`);
-          loadChats();
-        }, 400);
+        const chat = response?.chat as ChatItem | undefined;
+        if (!response?.ok || !chat) {
+          setIsCapturing(false);
+          setStatusLabel('Open a saved conversation, not the empty home screen');
+          return;
+        }
+
+        upsertChat(chat);
+        setIsCapturing(false);
+        setStatusLabel(`Saved ${chat.title}`);
+        setFeedbackMessage('Chat saved locally');
       });
     });
   };
-
-  useEffect(() => {
-    requestSync();
-  }, []);
 
   const filteredChats = useMemo<ChatItem[]>(() => {
     let result: ChatItem[] = Object.values(chats);
@@ -187,7 +303,8 @@ const App: React.FC = () => {
     if (query) {
       result = result.filter((chat) => {
         const promptMatch = chat.prompts.some((prompt) => prompt.toLowerCase().includes(query));
-        return chat.title.toLowerCase().includes(query) || promptMatch;
+        const notesMatch = (chat.notes || '').toLowerCase().includes(query);
+        return chat.title.toLowerCase().includes(query) || promptMatch || notesMatch;
       });
     }
 
@@ -195,119 +312,89 @@ const App: React.FC = () => {
       result = result.filter((chat) => chat.isBookmarked);
     }
 
-    result = result.filter((chat) => {
-      const date = getSafeDate(chat.date);
-
-      if (filterDate === 'today') return isToday(date);
-      if (filterDate === 'yesterday') return isYesterday(date);
-      if (filterDate === 'last7') return date >= subDays(new Date(), 7);
-      if (filterDate === 'month') {
-        const start = startOfMonth(new Date());
-        const end = endOfMonth(new Date());
-        return date >= start && date <= end;
-      }
-      return true;
+    return [...result].sort((a, b) => {
+      const aTime = getSafeDate(a.capturedAt || a.date).getTime();
+      const bTime = getSafeDate(b.capturedAt || b.date).getTime();
+      return bTime - aTime;
     });
-
-    const sorted: ChatItem[] = [...result];
-
-    if (sortMode === 'title') {
-      sorted.sort((a, b) => a.title.localeCompare(b.title));
-    } else if (sortMode === 'oldest') {
-      sorted.sort((a, b) => getSafeDate(a.date).getTime() - getSafeDate(b.date).getTime());
-    } else {
-      sorted.sort((a, b) => getSafeDate(b.date).getTime() - getSafeDate(a.date).getTime());
-    }
-
-    return sorted;
-  }, [chats, deferredSearchQuery, filterDate, showBookmarksOnly, sortMode]);
-
-  const groupedChats = useMemo<Record<string, ChatItem[]>>(() => {
-    return filteredChats.reduce<Record<string, ChatItem[]>>((groups, chat) => {
-      const date = getSafeDate(chat.date);
-      let groupName = format(date, 'MMMM yyyy');
-
-      if (isToday(date)) groupName = 'Today';
-      else if (isYesterday(date)) groupName = 'Yesterday';
-      else if (date >= subDays(new Date(), 7)) groupName = 'Last 7 Days';
-      else if (isThisMonth(date)) groupName = 'This Month';
-
-      if (!groups[groupName]) {
-        groups[groupName] = [];
-      }
-
-      groups[groupName].push(chat);
-      return groups;
-    }, {});
-  }, [filteredChats]);
+  }, [chats, deferredSearchQuery, showBookmarksOnly]);
 
   const stats = useMemo(() => {
     const items: ChatItem[] = Object.values(chats);
     return {
       totalChats: items.length,
       bookmarked: items.filter((chat) => chat.isBookmarked).length,
-      withPrompts: items.filter((chat) => chat.prompts.length > 0).length,
+      totalPrompts: items.reduce((count, chat) => count + chat.prompts.length, 0),
     };
   }, [chats]);
 
-  const exportData = (formatType: 'json' | 'csv') => {
+  const exportData = (formatType: 'json' | 'pdf') => {
     const data: ChatItem[] = Object.values(chats);
-    let blob: Blob;
-    let filename: string;
 
     if (formatType === 'json') {
-      blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      filename = 'chatgpt-history.json';
-    } else {
-      const headers = ['ID', 'Title', 'URL', 'Date', 'Prompts', 'Bookmarked'];
-      const rows = data.map((chat) => [
-        chat.id,
-        `"${chat.title.replace(/"/g, '""')}"`,
-        chat.url,
-        chat.date,
-        `"${chat.prompts.join(' | ').replace(/"/g, '""')}"`,
-        chat.isBookmarked ? 'Yes' : 'No',
-      ]);
-      const csvContent = [headers, ...rows].map((row) => row.join(',')).join('\n');
-      blob = new Blob([csvContent], { type: 'text/csv' });
-      filename = 'chatgpt-history.csv';
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'chatgpt-prompt-library.json';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setFeedbackMessage('Exported JSON');
+      return;
     }
 
+    if (data.length === 0) {
+      setFeedbackMessage('Save a chat before exporting PDF');
+      return;
+    }
+
+    const sortedData = [...data].sort(
+      (a, b) => getSafeDate(b.capturedAt || b.date).getTime() - getSafeDate(a.capturedAt || a.date).getTime(),
+    );
+    const pdfBytes = buildPdfBytes(sortedData);
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = filename;
+    anchor.download = 'chatgpt-prompt-library.pdf';
     anchor.click();
     URL.revokeObjectURL(url);
-    setFeedbackMessage(`Exported ${formatType.toUpperCase()}`);
+    setFeedbackMessage('Downloaded PDF');
   };
 
   const deleteChat = (id: string) => {
     const nextChats = { ...chats };
     delete nextChats[id];
-    setChats(nextChats);
+    saveChats(nextChats);
     setSelectedChatId((currentId) => (currentId === id ? null : currentId));
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.local.set({ chats: nextChats });
-    }
   };
 
   const toggleBookmark = (id: string) => {
-    const nextChats = { ...chats };
-    nextChats[id] = {
-      ...nextChats[id],
-      isBookmarked: !nextChats[id].isBookmarked,
+    const nextChats = {
+      ...chats,
+      [id]: {
+        ...chats[id],
+        isBookmarked: !chats[id].isBookmarked,
+      },
     };
-    setChats(nextChats);
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      chrome.storage.local.set({ chats: nextChats });
-    }
+    saveChats(nextChats);
+  };
+
+  const updateNotes = (id: string, notes: string) => {
+    const nextChats = {
+      ...chats,
+      [id]: {
+        ...chats[id],
+        notes,
+      },
+    };
+    saveChats(nextChats);
   };
 
   const copyPrompts = async (chat: ChatItem) => {
     const text = chat.prompts.join('\n\n');
     if (!text) {
-      setFeedbackMessage('No prompts available yet');
+      setFeedbackMessage('No prompts saved for this chat');
       return;
     }
 
@@ -317,13 +404,6 @@ const App: React.FC = () => {
     } catch {
       setFeedbackMessage('Clipboard blocked');
     }
-  };
-
-  const resetFilters = () => {
-    setSearchQuery('');
-    setFilterDate('all');
-    setShowBookmarksOnly(false);
-    setSortMode('newest');
   };
 
   const selectedChat = selectedChatId ? chats[selectedChatId] : null;
@@ -347,17 +427,17 @@ const App: React.FC = () => {
                 <Sparkles size={18} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight">History Organizer</h1>
-                <p className={`text-xs ${subduedText}`}>{lastSyncLabel}</p>
+                <h1 className="text-xl font-semibold tracking-tight">Prompt Library</h1>
+                <p className={`text-xs ${subduedText}`}>{statusLabel}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={requestSync}
-                className={`rounded-xl border p-2 transition ${panelClasses}`}
-                title="Sync now"
+                onClick={captureCurrentChat}
+                className="rounded-xl bg-emerald-500 p-2 text-white transition hover:bg-emerald-600"
+                title="Save current chat"
               >
-                <RefreshCw size={17} className={isSyncing ? 'animate-spin' : ''} />
+                <RefreshCw size={17} className={isCapturing ? 'animate-spin' : ''} />
               </button>
               <button
                 onClick={() => setIsDarkMode((value) => !value)}
@@ -375,19 +455,27 @@ const App: React.FC = () => {
                   JSON
                 </button>
                 <button
-                  onClick={() => exportData('csv')}
+                  onClick={() => exportData('pdf')}
                   className={`border-l px-3 py-2 text-xs font-medium transition ${secondarySurface} ${isDarkMode ? 'border-white/10' : 'border-black/5'}`}
-                  title="Export CSV"
+                  title="Export PDF"
                 >
-                  CSV
+                  PDF
                 </button>
               </div>
             </div>
           </div>
 
+          <button
+            onClick={captureCurrentChat}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-emerald-600"
+          >
+            <BookOpen size={16} />
+            Save Current Chat
+          </button>
+
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className={`rounded-2xl border p-3 backdrop-blur ${panelClasses}`}>
-              <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Chats</p>
+              <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Saved Chats</p>
               <p className="mt-2 text-2xl font-semibold">{stats.totalChats}</p>
             </div>
             <div className={`rounded-2xl border p-3 backdrop-blur ${panelClasses}`}>
@@ -395,8 +483,8 @@ const App: React.FC = () => {
               <p className="mt-2 text-2xl font-semibold">{stats.bookmarked}</p>
             </div>
             <div className={`rounded-2xl border p-3 backdrop-blur ${panelClasses}`}>
-              <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Prompted</p>
-              <p className="mt-2 text-2xl font-semibold">{stats.withPrompts}</p>
+              <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Prompts</p>
+              <p className="mt-2 text-2xl font-semibold">{stats.totalPrompts}</p>
             </div>
           </div>
         </header>
@@ -407,13 +495,15 @@ const App: React.FC = () => {
               <div className={`flex items-center gap-3 border-b px-4 py-3 ${isDarkMode ? 'border-white/10' : 'border-black/5'}`}>
                 <button
                   onClick={() => setSelectedChatId(null)}
-                  className={`rounded-xl border p-2 transition ${panelClasses}`}
+                  className={`rounded-xl border px-3 py-2 text-sm transition ${panelClasses}`}
                 >
-                  <ChevronRight size={18} className="rotate-180" />
+                  Back
                 </button>
                 <div className="min-w-0 flex-1">
                   <h2 className="truncate text-sm font-semibold">{selectedChat.title}</h2>
-                  <p className={`text-xs ${subduedText}`}>{format(getSafeDate(selectedChat.date), 'PPP p')}</p>
+                  <p className={`text-xs ${subduedText}`}>
+                    Saved {format(getSafeDate(selectedChat.capturedAt || selectedChat.date), 'PPP p')}
+                  </p>
                 </div>
                 <button
                   onClick={() => toggleBookmark(selectedChat.id)}
@@ -428,13 +518,13 @@ const App: React.FC = () => {
                 <div className={`rounded-2xl border p-3 ${panelClasses}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Conversation</p>
+                      <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Saved Conversation</p>
                       <p className="mt-1 text-sm font-medium">
                         {selectedChat.prompts.length} saved {selectedChat.prompts.length === 1 ? 'prompt' : 'prompts'}
                       </p>
                     </div>
                     <div className={`rounded-full px-3 py-1 text-[11px] font-medium ${secondarySurface}`}>
-                      {format(getSafeDate(selectedChat.date), 'MMM d')}
+                      {format(getSafeDate(selectedChat.capturedAt || selectedChat.date), 'MMM d')}
                     </div>
                   </div>
                 </div>
@@ -464,7 +554,7 @@ const App: React.FC = () => {
 
                 <div className="mt-5">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${subduedText}`}>User Prompts</h3>
+                    <h3 className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${subduedText}`}>Notes</h3>
                     <button
                       onClick={() => deleteChat(selectedChat.id)}
                       className="inline-flex items-center gap-1 text-xs text-rose-500 transition hover:text-rose-400"
@@ -473,6 +563,16 @@ const App: React.FC = () => {
                       Remove
                     </button>
                   </div>
+                  <textarea
+                    value={selectedChat.notes || ''}
+                    onChange={(event) => updateNotes(selectedChat.id, event.target.value)}
+                    placeholder="Add your summary, ideas, or follow-up steps here"
+                    className={`min-h-28 w-full rounded-2xl border p-3 text-sm outline-none ${panelClasses}`}
+                  />
+                </div>
+
+                <div className="mt-5">
+                  <h3 className={`mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] ${subduedText}`}>Saved Prompts</h3>
 
                   {selectedChat.prompts.length > 0 ? (
                     <div className="space-y-3">
@@ -487,9 +587,9 @@ const App: React.FC = () => {
                     </div>
                   ) : (
                     <div className={`rounded-2xl border border-dashed p-4 text-sm ${panelClasses}`}>
-                      <p className="font-medium">No prompts extracted yet</p>
+                      <p className="font-medium">No prompts captured from this chat</p>
                       <p className={`mt-1 ${subduedText}`}>
-                        Open this chat in ChatGPT and press refresh so the content script can capture your user messages.
+                        Open the chat in ChatGPT so its messages are visible, then save it again.
                       </p>
                     </div>
                   )}
@@ -503,7 +603,7 @@ const App: React.FC = () => {
                   <Search className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${subduedText}`} size={16} />
                   <input
                     type="text"
-                    placeholder="Search chats or prompt text"
+                    placeholder="Search saved chats, prompts, or notes"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
                     className="w-full bg-transparent py-3 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-400"
@@ -511,23 +611,16 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1">
-                    {(Object.keys(dateFilterLabels) as DateFilter[]).map((key) => (
-                      <button
-                        key={key}
-                        onClick={() => setFilterDate(key)}
-                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                          filterDate === key
-                            ? 'bg-emerald-500 text-white'
-                            : `${secondarySurface} ${subduedText}`
-                        }`}
-                      >
-                        {dateFilterLabels[key]}
-                      </button>
-                    ))}
-                  </div>
                   <button
-                    onClick={() => setShowBookmarksOnly((value) => !value)}
+                    onClick={() => setShowBookmarksOnly(false)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                      !showBookmarksOnly ? 'bg-emerald-500 text-white' : `${secondarySurface} ${subduedText}`
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setShowBookmarksOnly(true)}
                     className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
                       showBookmarksOnly ? 'bg-amber-500 text-white' : `${secondarySurface} ${subduedText}`
                     }`}
@@ -535,115 +628,75 @@ const App: React.FC = () => {
                     Saved
                   </button>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <div className={`flex flex-1 items-center gap-2 rounded-2xl border px-3 py-2 text-xs ${panelClasses}`}>
-                    {sortMode === 'title' ? <ArrowDownAZ size={14} /> : <Calendar size={14} />}
-                    <select
-                      value={sortMode}
-                      onChange={(event) => setSortMode(event.target.value as SortMode)}
-                      className="w-full bg-transparent outline-none"
-                    >
-                      <option value="newest">Newest first</option>
-                      <option value="oldest">Oldest first</option>
-                      <option value="title">Title A-Z</option>
-                    </select>
-                  </div>
-                  <button
-                    onClick={resetFilters}
-                    className={`rounded-2xl border px-3 py-2 text-xs font-medium transition ${panelClasses}`}
-                  >
-                    Reset
-                  </button>
-                </div>
               </div>
 
               <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
                 {filteredChats.length > 0 ? (
-                  <div className="space-y-5">
-                    {(Object.entries(groupedChats) as [string, ChatItem[]][]).map(([groupName, groupChats]) => (
-                      <div key={groupName}>
-                        <div className="mb-2 flex items-center justify-between">
-                          <h3 className={`text-[11px] font-semibold uppercase tracking-[0.2em] ${subduedText}`}>{groupName}</h3>
-                          <span className={`text-[11px] ${subduedText}`}>{groupChats.length}</span>
-                        </div>
-                        <div className="space-y-2">
-                          {groupChats.map((chat) => (
-                            <button
-                              key={chat.id}
-                              onClick={() => setSelectedChatId(chat.id)}
-                              className={`group w-full rounded-2xl border p-3 text-left transition hover:-translate-y-[1px] hover:shadow-lg ${panelClasses}`}
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-500">
-                                  <Sparkles size={16} />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <p className="truncate text-sm font-semibold">{chat.title}</p>
-                                      <p className={`mt-1 text-xs ${subduedText}`}>
-                                        {format(getSafeDate(chat.date), 'MMM d')} | {chat.prompts.length} prompts
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      {chat.isBookmarked ? (
-                                        <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">
-                                          Saved
-                                        </span>
-                                      ) : null}
-                                      <ChevronRight
-                                        size={16}
-                                        className={`transition ${subduedText} group-hover:translate-x-0.5`}
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="mt-3 flex items-center gap-2">
-                                    <button
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        toggleBookmark(chat.id);
-                                      }}
-                                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${secondarySurface}`}
-                                    >
-                                      <span className="inline-flex items-center gap-1">
-                                        <Star size={12} fill={chat.isBookmarked ? 'currentColor' : 'none'} />
-                                        {chat.isBookmarked ? 'Saved' : 'Save'}
-                                      </span>
-                                    </button>
-                                    <button
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        deleteChat(chat.id);
-                                      }}
-                                      className="rounded-full px-2.5 py-1 text-[11px] font-medium text-rose-500 transition hover:bg-rose-500/10"
-                                    >
-                                      Remove
-                                    </button>
-                                  </div>
-                                </div>
+                  <div className="space-y-2">
+                    {filteredChats.map((chat) => (
+                      <button
+                        key={chat.id}
+                        onClick={() => setSelectedChatId(chat.id)}
+                        className={`group w-full rounded-2xl border p-3 text-left transition hover:-translate-y-[1px] hover:shadow-lg ${panelClasses}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-500">
+                            <Sparkles size={16} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold">{chat.title}</p>
+                                <p className={`mt-1 text-xs ${subduedText}`}>
+                                  Saved {format(getSafeDate(chat.capturedAt || chat.date), 'MMM d')} | {chat.prompts.length} prompts
+                                </p>
+                                {chat.notes ? (
+                                  <p className={`mt-2 line-clamp-2 text-xs ${subduedText}`}>{chat.notes}</p>
+                                ) : null}
                               </div>
-                            </button>
-                          ))}
+                              {chat.isBookmarked ? (
+                                <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">
+                                  Saved
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="mt-3 flex items-center gap-2">
+                              <button
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  toggleBookmark(chat.id);
+                                }}
+                                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${secondarySurface}`}
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  <Star size={12} fill={chat.isBookmarked ? 'currentColor' : 'none'} />
+                                  {chat.isBookmarked ? 'Saved' : 'Save'}
+                                </span>
+                              </button>
+                              <button
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  deleteChat(chat.id);
+                                }}
+                                className="rounded-full px-2.5 py-1 text-[11px] font-medium text-rose-500 transition hover:bg-rose-500/10"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 ) : (
                   <div className={`flex h-full flex-col items-center justify-center rounded-3xl border border-dashed px-8 text-center ${panelClasses}`}>
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-500">
-                      <Search size={24} />
+                      <BookOpen size={24} />
                     </div>
-                    <h3 className="mt-4 text-base font-semibold">Nothing matches yet</h3>
+                    <h3 className="mt-4 text-base font-semibold">Your library is empty</h3>
                     <p className={`mt-2 text-sm ${subduedText}`}>
-                      Try a different search, clear filters, or sync while the ChatGPT sidebar is visible.
+                      Open a ChatGPT conversation, then click Save Current Chat to keep its prompts locally.
                     </p>
-                    <button
-                      onClick={resetFilters}
-                      className="mt-4 rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-600"
-                    >
-                      Clear filters
-                    </button>
                   </div>
                 )}
               </div>
@@ -652,7 +705,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className={`flex items-center justify-between border-t px-4 py-3 text-[11px] ${isDarkMode ? 'border-white/10 text-zinc-400' : 'border-black/5 text-zinc-500'}`}>
-          <span>{feedbackMessage || 'Search, save, sync, and export your ChatGPT history'}</span>
+          <span>{feedbackMessage || 'Capture chats manually, keep notes, and export your prompt library'}</span>
           <span className="inline-flex items-center gap-1">
             <Download size={12} />
             Local only
