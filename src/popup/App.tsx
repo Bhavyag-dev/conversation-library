@@ -7,7 +7,6 @@ import {
   Moon,
   RefreshCw,
   Search,
-  Sparkles,
   Star,
   Sun,
   Trash2,
@@ -86,7 +85,7 @@ const buildPdfBytes = (chats: ChatItem[], title: string) => {
   };
 
   pushLine(title, 18);
-  pushLine(`Exported ${format(new Date(), 'PPP p')}`, 11);
+  pushLine(`Created ${format(new Date(), 'PPP p')}`, 11);
   pushLine(`Chats saved: ${chats.length}`, 11);
   pushLine('', 11);
 
@@ -172,7 +171,7 @@ const App: React.FC = () => {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [showBookmarksOnly, setShowBookmarksOnly] = useState(false);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [statusLabel, setStatusLabel] = useState('Open a ChatGPT conversation and save it here');
+  const [statusLabel, setStatusLabel] = useState('Open a conversation and save it here');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
   const loadChats = () => {
@@ -270,14 +269,14 @@ const App: React.FC = () => {
 
       if (!activeTabId || !isSupportedPage) {
         setIsCapturing(false);
-        setStatusLabel('Open a ChatGPT conversation first');
+        setStatusLabel('Open a conversation first');
         return;
       }
 
       chrome.tabs.sendMessage(activeTabId, { type: 'history-organizer:capture-current-chat' }, (response) => {
         if (chrome.runtime.lastError) {
           setIsCapturing(false);
-          setStatusLabel('Reload the ChatGPT tab and try again');
+          setStatusLabel('Reload the tab and try again');
           return;
         }
 
@@ -351,7 +350,7 @@ const App: React.FC = () => {
     const sortedData = [...data].sort(
       (a, b) => getSafeDate(b.capturedAt || b.date).getTime() - getSafeDate(a.capturedAt || a.date).getTime(),
     );
-    const pdfTitle = selectedChat ? `Chat Export: ${selectedChat.title}` : 'ChatGPT Prompt Library';
+    const pdfTitle = selectedChat ? `Conversation Export: ${selectedChat.title}` : 'Conversation Library';
     const pdfBytes = buildPdfBytes(sortedData, pdfTitle);
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
@@ -427,10 +426,10 @@ const App: React.FC = () => {
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-[0_12px_30px_rgba(16,185,129,0.35)]">
-                <Sparkles size={18} />
+                <BookOpen size={18} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight">Prompt Library</h1>
+                <h1 className="text-xl font-semibold tracking-tight">Conversation Library</h1>
                 <p className={`text-xs ${subduedText}`}>{statusLabel}</p>
               </div>
             </div>
@@ -644,7 +643,7 @@ const App: React.FC = () => {
                       >
                         <div className="flex items-start gap-3">
                           <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-500">
-                            <Sparkles size={16} />
+                            <BookOpen size={16} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
@@ -698,7 +697,7 @@ const App: React.FC = () => {
                     </div>
                     <h3 className="mt-4 text-base font-semibold">Your library is empty</h3>
                     <p className={`mt-2 text-sm ${subduedText}`}>
-                      Open a ChatGPT conversation, then click Save Current Chat to keep its prompts locally.
+                      Open a conversation, then click Save Current Chat to keep its prompts locally.
                     </p>
                   </div>
                 )}
@@ -708,7 +707,7 @@ const App: React.FC = () => {
         </main>
 
         <footer className={`flex items-center justify-between border-t px-4 py-3 text-[11px] ${isDarkMode ? 'border-white/10 text-zinc-400' : 'border-black/5 text-zinc-500'}`}>
-          <span>{feedbackMessage || 'Capture chats manually, keep notes, and export your prompt library'}</span>
+          <span>{feedbackMessage || 'Save conversations, keep notes, and export your library'}</span>
           <span className="inline-flex items-center gap-1">
             <Download size={12} />
             Local only

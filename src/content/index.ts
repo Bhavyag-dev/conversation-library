@@ -1,5 +1,5 @@
 /**
- * ChatGPT History Organizer - Content Script
+ * Conversation Library - Content Script
  * Captures the currently open ChatGPT conversation on demand.
  */
 

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ChatGPT History Organizer",
+  "name": "Conversation Library",
   "version": "1.0.0",
   "description": "Enhance your ChatGPT experience by organizing, searching, and exporting your chat history.",
   "permissions": ["storage", "activeTab", "tabs"],
