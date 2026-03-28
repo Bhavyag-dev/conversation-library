@@ -410,33 +410,46 @@ const App: React.FC = () => {
 
   const selectedChat = selectedChatId ? chats[selectedChatId] : null;
   const shellClasses = isDarkMode
-    ? 'bg-[#0d1117] text-zinc-100'
-    : 'bg-[#f7f7f3] text-zinc-900';
+    ? 'bg-[#0f1720] text-stone-100'
+    : 'bg-[#f6f1e8] text-stone-900';
   const panelClasses = isDarkMode
-    ? 'border-white/10 bg-white/5'
-    : 'border-black/5 bg-white/80';
-  const subduedText = isDarkMode ? 'text-zinc-400' : 'text-zinc-500';
-  const secondarySurface = isDarkMode ? 'bg-white/6 hover:bg-white/10' : 'bg-black/[0.04] hover:bg-black/[0.06]';
+    ? 'border-white/8 bg-white/[0.045] shadow-[0_18px_40px_rgba(0,0,0,0.22)]'
+    : 'border-[#d9ccbc] bg-white/72 shadow-[0_18px_40px_rgba(120,98,68,0.12)]';
+  const subduedText = isDarkMode ? 'text-stone-400' : 'text-stone-500';
+  const secondarySurface = isDarkMode
+    ? 'bg-white/[0.06] hover:bg-white/[0.11]'
+    : 'bg-[#f1e7d8] hover:bg-[#eadcc8]';
+  const accentButton = isDarkMode
+    ? 'bg-[#0f766e] text-white hover:bg-[#115e59] shadow-[0_14px_30px_rgba(15,118,110,0.32)]'
+    : 'bg-[#0f766e] text-white hover:bg-[#115e59] shadow-[0_14px_30px_rgba(15,118,110,0.22)]';
+  const headingFont = 'font-["Georgia","Cambria","Times_New_Roman",serif]';
 
   return (
     <div className={`relative h-[640px] w-[430px] overflow-hidden ${shellClasses}`}>
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.16),_transparent_38%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_42%)]" />
+      <div
+        className={`absolute inset-0 ${
+          isDarkMode
+            ? 'bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(249,115,22,0.12),_transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_48%)]'
+            : 'bg-[radial-gradient(circle_at_top_left,_rgba(15,118,110,0.16),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(180,83,9,0.16),_transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.35),transparent_50%)]'
+        }`}
+      />
+      <div className="absolute inset-x-0 top-0 h-28 bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent)]" />
       <div className="relative flex h-full flex-col">
-        <header className={`border-b px-4 pb-4 pt-4 ${isDarkMode ? 'border-white/10' : 'border-black/5'}`}>
+        <header className={`border-b px-4 pb-4 pt-4 ${isDarkMode ? 'border-white/10' : 'border-[#ddcfbe]'}`}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-500 text-white shadow-[0_12px_30px_rgba(16,185,129,0.35)]">
+              <div className={`flex h-12 w-12 items-center justify-center rounded-[1.35rem] ${accentButton}`}>
                 <BookOpen size={18} />
               </div>
               <div>
-                <h1 className="text-xl font-semibold tracking-tight">Conversation Library</h1>
+                <h1 className={`text-[1.45rem] tracking-tight ${headingFont}`}>Conversation Library</h1>
                 <p className={`text-xs ${subduedText}`}>{statusLabel}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={captureCurrentChat}
-                className="rounded-xl bg-emerald-500 p-2 text-white transition hover:bg-emerald-600"
+                className={`rounded-2xl p-2.5 transition ${accentButton}`}
                 title="Save current chat"
               >
                 <RefreshCw size={17} className={isCapturing ? 'animate-spin' : ''} />
@@ -451,14 +464,14 @@ const App: React.FC = () => {
               <div className="flex overflow-hidden rounded-xl border shadow-sm">
                 <button
                   onClick={() => exportData('json')}
-                  className={`px-3 py-2 text-xs font-medium transition ${secondarySurface}`}
+                  className={`px-3 py-2 text-xs font-semibold tracking-[0.08em] transition ${secondarySurface}`}
                   title="Export JSON"
                 >
                   JSON
                 </button>
                 <button
                   onClick={() => exportData('pdf')}
-                  className={`border-l px-3 py-2 text-xs font-medium transition ${secondarySurface} ${isDarkMode ? 'border-white/10' : 'border-black/5'}`}
+                  className={`border-l px-3 py-2 text-xs font-semibold tracking-[0.08em] transition ${secondarySurface} ${isDarkMode ? 'border-white/10' : 'border-[#d9ccbc]'}`}
                   title="Export PDF"
                 >
                   PDF
@@ -469,24 +482,24 @@ const App: React.FC = () => {
 
           <button
             onClick={captureCurrentChat}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-emerald-600"
+            className={`mt-4 flex w-full items-center justify-center gap-2 rounded-[1.4rem] px-4 py-3.5 text-sm font-semibold tracking-[0.02em] transition ${accentButton}`}
           >
             <BookOpen size={16} />
             Save Current Chat
           </button>
 
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className={`rounded-2xl border p-3 backdrop-blur ${panelClasses}`}>
+            <div className={`rounded-[1.4rem] border p-3 backdrop-blur ${panelClasses}`}>
               <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Saved Chats</p>
-              <p className="mt-2 text-2xl font-semibold">{stats.totalChats}</p>
+              <p className={`mt-2 text-2xl ${headingFont}`}>{stats.totalChats}</p>
             </div>
-            <div className={`rounded-2xl border p-3 backdrop-blur ${panelClasses}`}>
+            <div className={`rounded-[1.4rem] border p-3 backdrop-blur ${panelClasses}`}>
               <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Bookmarked</p>
-              <p className="mt-2 text-2xl font-semibold">{stats.bookmarked}</p>
+              <p className={`mt-2 text-2xl ${headingFont}`}>{stats.bookmarked}</p>
             </div>
-            <div className={`rounded-2xl border p-3 backdrop-blur ${panelClasses}`}>
+            <div className={`rounded-[1.4rem] border p-3 backdrop-blur ${panelClasses}`}>
               <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Prompts</p>
-              <p className="mt-2 text-2xl font-semibold">{stats.totalPrompts}</p>
+              <p className={`mt-2 text-2xl ${headingFont}`}>{stats.totalPrompts}</p>
             </div>
           </div>
         </header>
@@ -494,15 +507,15 @@ const App: React.FC = () => {
         <main className="flex min-h-0 flex-1 flex-col">
           {selectedChat ? (
             <section className="flex min-h-0 flex-1 flex-col">
-              <div className={`flex items-center gap-3 border-b px-4 py-3 ${isDarkMode ? 'border-white/10' : 'border-black/5'}`}>
+              <div className={`flex items-center gap-3 border-b px-4 py-3 ${isDarkMode ? 'border-white/10' : 'border-[#ddcfbe]'}`}>
                 <button
                   onClick={() => setSelectedChatId(null)}
-                  className={`rounded-xl border px-3 py-2 text-sm transition ${panelClasses}`}
+                  className={`rounded-2xl border px-3 py-2 text-sm transition ${panelClasses}`}
                 >
                   Back
                 </button>
                 <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-sm font-semibold">{selectedChat.title}</h2>
+                  <h2 className={`truncate text-base ${headingFont}`}>{selectedChat.title}</h2>
                   <p className={`text-xs ${subduedText}`}>
                     Saved {format(getSafeDate(selectedChat.capturedAt || selectedChat.date), 'PPP p')}
                   </p>
@@ -517,7 +530,7 @@ const App: React.FC = () => {
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4">
-                <div className={`rounded-2xl border p-3 ${panelClasses}`}>
+                <div className={`rounded-[1.45rem] border p-3 ${panelClasses}`}>
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className={`text-[11px] uppercase tracking-[0.18em] ${subduedText}`}>Saved Conversation</p>
@@ -534,7 +547,7 @@ const App: React.FC = () => {
                 <div className="mt-4 flex gap-2">
                   <button
                     onClick={() => copyPrompts(selectedChat)}
-                    className="flex-1 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-medium text-white transition hover:bg-emerald-600"
+                    className={`flex-1 rounded-[1.35rem] px-4 py-3 text-sm font-semibold text-white transition ${accentButton}`}
                   >
                     <span className="inline-flex items-center gap-2">
                       <Copy size={16} />
@@ -545,7 +558,7 @@ const App: React.FC = () => {
                     href={selectedChat.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`rounded-2xl border px-4 py-3 text-sm font-medium transition ${panelClasses}`}
+                    className={`rounded-[1.35rem] border px-4 py-3 text-sm font-semibold transition ${panelClasses}`}
                   >
                     <span className="inline-flex items-center gap-2">
                       <ExternalLink size={16} />
@@ -569,7 +582,7 @@ const App: React.FC = () => {
                     value={selectedChat.notes || ''}
                     onChange={(event) => updateNotes(selectedChat.id, event.target.value)}
                     placeholder="Add your summary, ideas, or follow-up steps here"
-                    className={`min-h-28 w-full rounded-2xl border p-3 text-sm outline-none ${panelClasses}`}
+                    className={`min-h-28 w-full rounded-[1.35rem] border p-3 text-sm leading-6 outline-none ${panelClasses} ${isDarkMode ? 'placeholder:text-stone-500' : 'placeholder:text-stone-400'}`}
                   />
                 </div>
 
@@ -581,14 +594,14 @@ const App: React.FC = () => {
                       {selectedChat.prompts.map((prompt, index) => (
                         <div
                           key={`${selectedChat.id}-${index}`}
-                          className={`rounded-2xl border p-3 text-sm leading-6 ${panelClasses}`}
+                          className={`rounded-[1.35rem] border p-3 text-sm leading-6 ${panelClasses}`}
                         >
                           {prompt}
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className={`rounded-2xl border border-dashed p-4 text-sm ${panelClasses}`}>
+                    <div className={`rounded-[1.35rem] border border-dashed p-4 text-sm ${panelClasses}`}>
                       <p className="font-medium">No prompts captured from this chat</p>
                       <p className={`mt-1 ${subduedText}`}>
                         Open the chat in ChatGPT so its messages are visible, then save it again.
@@ -601,14 +614,14 @@ const App: React.FC = () => {
           ) : (
             <section className="flex min-h-0 flex-1 flex-col px-4 py-4">
               <div className="space-y-3">
-                <div className={`relative overflow-hidden rounded-2xl border ${panelClasses}`}>
+                <div className={`relative overflow-hidden rounded-[1.4rem] border ${panelClasses}`}>
                   <Search className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 ${subduedText}`} size={16} />
                   <input
                     type="text"
                     placeholder="Search saved chats, prompts, or notes"
                     value={searchQuery}
                     onChange={(event) => setSearchQuery(event.target.value)}
-                    className="w-full bg-transparent py-3 pl-10 pr-4 text-sm outline-none placeholder:text-zinc-400"
+                    className={`w-full bg-transparent py-3 pl-10 pr-4 text-sm outline-none ${isDarkMode ? 'placeholder:text-stone-500' : 'placeholder:text-stone-400'}`}
                   />
                 </div>
 
@@ -616,7 +629,7 @@ const App: React.FC = () => {
                   <button
                     onClick={() => setShowBookmarksOnly(false)}
                     className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                      !showBookmarksOnly ? 'bg-emerald-500 text-white' : `${secondarySurface} ${subduedText}`
+                      !showBookmarksOnly ? `${accentButton} text-white` : `${secondarySurface} ${subduedText}`
                     }`}
                   >
                     All
@@ -624,7 +637,11 @@ const App: React.FC = () => {
                   <button
                     onClick={() => setShowBookmarksOnly(true)}
                     className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-                      showBookmarksOnly ? 'bg-amber-500 text-white' : `${secondarySurface} ${subduedText}`
+                      showBookmarksOnly
+                        ? isDarkMode
+                          ? 'bg-[#b45309] text-white shadow-[0_12px_28px_rgba(180,83,9,0.35)]'
+                          : 'bg-[#b45309] text-white shadow-[0_12px_28px_rgba(180,83,9,0.22)]'
+                        : `${secondarySurface} ${subduedText}`
                     }`}
                   >
                     Saved
@@ -639,16 +656,16 @@ const App: React.FC = () => {
                       <button
                         key={chat.id}
                         onClick={() => setSelectedChatId(chat.id)}
-                        className={`group w-full rounded-2xl border p-3 text-left transition hover:-translate-y-[1px] hover:shadow-lg ${panelClasses}`}
+                        className={`group w-full rounded-[1.45rem] border p-3 text-left transition hover:-translate-y-[2px] ${panelClasses}`}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-500">
+                          <div className={`mt-0.5 flex h-10 w-10 items-center justify-center rounded-[1.05rem] ${isDarkMode ? 'bg-[#0f766e]/20 text-teal-300' : 'bg-[#0f766e]/12 text-[#0f766e]'}`}>
                             <BookOpen size={16} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-semibold">{chat.title}</p>
+                                <p className={`truncate text-[15px] ${headingFont}`}>{chat.title}</p>
                                 <p className={`mt-1 text-xs ${subduedText}`}>
                                   Saved {format(getSafeDate(chat.capturedAt || chat.date), 'MMM d')} | {chat.prompts.length} prompts
                                 </p>
@@ -657,7 +674,7 @@ const App: React.FC = () => {
                                 ) : null}
                               </div>
                               {chat.isBookmarked ? (
-                                <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-amber-500">
+                                <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${isDarkMode ? 'bg-[#b45309]/20 text-orange-300' : 'bg-[#b45309]/12 text-[#92400e]'}`}>
                                   Saved
                                 </span>
                               ) : null}
@@ -691,11 +708,11 @@ const App: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <div className={`flex h-full flex-col items-center justify-center rounded-3xl border border-dashed px-8 text-center ${panelClasses}`}>
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-500">
+                  <div className={`flex h-full flex-col items-center justify-center rounded-[1.9rem] border border-dashed px-8 text-center ${panelClasses}`}>
+                    <div className={`flex h-14 w-14 items-center justify-center rounded-[1.2rem] ${isDarkMode ? 'bg-[#0f766e]/20 text-teal-300' : 'bg-[#0f766e]/12 text-[#0f766e]'}`}>
                       <BookOpen size={24} />
                     </div>
-                    <h3 className="mt-4 text-base font-semibold">Your library is empty</h3>
+                    <h3 className={`mt-4 text-lg ${headingFont}`}>Your library is empty</h3>
                     <p className={`mt-2 text-sm ${subduedText}`}>
                       Open a conversation, then click Save Current Chat to keep its prompts locally.
                     </p>
@@ -706,7 +723,7 @@ const App: React.FC = () => {
           )}
         </main>
 
-        <footer className={`flex items-center justify-between border-t px-4 py-3 text-[11px] ${isDarkMode ? 'border-white/10 text-zinc-400' : 'border-black/5 text-zinc-500'}`}>
+        <footer className={`flex items-center justify-between border-t px-4 py-3 text-[11px] ${isDarkMode ? 'border-white/10 text-stone-400' : 'border-[#ddcfbe] text-stone-500'}`}>
           <span>{feedbackMessage || 'Save conversations, keep notes, and export your library'}</span>
           <span className="inline-flex items-center gap-1">
             <Download size={12} />
